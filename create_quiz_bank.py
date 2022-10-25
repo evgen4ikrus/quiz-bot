@@ -1,4 +1,5 @@
 import os
+import json
 
 
 def get_question_and_answer(quiz_question):
@@ -23,3 +24,18 @@ def get_quiz_bank(folder='quiz_questions'):
                 question, answer = get_question_and_answer(quiz_question)
                 quiz_bank[question] = answer
     return(quiz_bank)
+
+
+def save_quiz_bank(quiz_bank, path):
+    quiz_bank = json.dumps(quiz_bank, ensure_ascii=False)
+    with open(path, 'w', encoding='UTF-8') as file:
+        file.write(quiz_bank)
+
+
+def main():
+    quiz_bank = get_quiz_bank()
+    save_quiz_bank(quiz_bank, 'quiz_bank.json')
+
+
+if __name__ == '__main__':
+    main()
