@@ -1,5 +1,5 @@
-import os
 import json
+import os
 
 
 def get_question_and_answer(quiz_question):

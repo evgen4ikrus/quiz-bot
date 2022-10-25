@@ -1,27 +1,20 @@
 import logging
 
+import telegram
 from environs import Env
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, Filters, MessageHandler, Updater
 
 logger = logging.getLogger(__name__)
 
 
-def start(update, _):
-    menu_keyboard = [
-        [
-            InlineKeyboardButton('Новый вопрос', callback_data='1'),
-            InlineKeyboardButton('Сдаться', callback_data='2'),
-        ],
-        [
-            InlineKeyboardButton('Мой счет', callback_data='3')
-        ],
-    ]
-    reply_markup = InlineKeyboardMarkup(menu_keyboard)
-    update.message.reply_text('Привет! Я бот для викторин.', reply_markup=reply_markup)
+def start(bot, update):
+    custom_keyboard = [['Новый вопрос', 'Сдаться'], ['Мой счет']]
+    reply_markup = telegram.ReplyKeyboardMarkup(custom_keyboard)
+    chat_id = str(update.effective_user.id)
+    bot.send_message(chat_id=chat_id, text='Привет, я бот для викторин!', reply_markup=reply_markup)
 
 
-def echo(update, _):
+def echo(bot, update):
     update.message.reply_text(update.message.text)
 
 
@@ -31,10 +24,11 @@ def main():
     env.read_env()
     tg_token = env('TG_TOKEN')
     updater = Updater(tg_token)
-    dispatcher = updater.dispatcher
 
-    dispatcher.add_handler(CommandHandler('start', start))
-    dispatcher.add_handler(MessageHandler(Filters.text, echo))
+    dp = updater.dispatcher
+
+    dp.add_handler(CommandHandler('start', start))
+    dp.add_handler(MessageHandler(Filters.text, echo))
 
     updater.start_polling()
 
