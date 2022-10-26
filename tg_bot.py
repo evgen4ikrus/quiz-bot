@@ -3,8 +3,10 @@ import logging
 import telegram
 from environs import Env
 from telegram.ext import CommandHandler, Filters, MessageHandler, Updater
+from quiz_helpers import get_random_question
 
-logger = logging.getLogger(__name__)
+
+logger = logging.getLogger('tg_bot')
 
 
 def start(bot, update):
@@ -15,7 +17,10 @@ def start(bot, update):
 
 
 def echo(bot, update):
-    update.message.reply_text(update.message.text)
+    message_text = update.message.text
+    if message_text == 'Новый вопрос':
+        question = get_random_question()
+        update.message.reply_text(question)
 
 
 def main():
@@ -31,6 +36,7 @@ def main():
     dp.add_handler(MessageHandler(Filters.text, echo))
 
     updater.start_polling()
+    logger.info('TG бот запущен')
 
     updater.idle()
 
