@@ -14,18 +14,17 @@ logger = logging.getLogger('tg_bot')
 
 
 NEW_QUESTION, SOLUTION_ATTEMPT = range(2)
+MENU_KEYBOARD = [['Новый вопрос', 'Сдаться'], ['Мой счет']]
 
 
 def start(bot, update):
-    menu_keyboard = [['Новый вопрос', 'Сдаться'], ['Мой счет']]
-    reply_markup = telegram.ReplyKeyboardMarkup(menu_keyboard)
+    reply_markup = telegram.ReplyKeyboardMarkup(MENU_KEYBOARD)
     update.message.reply_text('Привет, я бот для викторин! Нажми кнопку "Новый вопрос"', reply_markup=reply_markup)
     return NEW_QUESTION
 
 
 def handle_new_question_request(bot, update, redis_db):
-    menu_keyboard = [['Новый вопрос', 'Сдаться'], ['Мой счет']]
-    reply_markup = telegram.ReplyKeyboardMarkup(menu_keyboard)
+    reply_markup = telegram.ReplyKeyboardMarkup(MENU_KEYBOARD)
     chat_id = str(update.effective_user.id)
     question = get_random_question()
     redis_db.set(chat_id, question)
@@ -34,8 +33,7 @@ def handle_new_question_request(bot, update, redis_db):
 
 
 def handle_solution_attempt(bot, update, redis_db):
-    menu_keyboard = [['Новый вопрос', 'Сдаться'], ['Мой счет']]
-    reply_markup = telegram.ReplyKeyboardMarkup(menu_keyboard)
+    reply_markup = telegram.ReplyKeyboardMarkup(MENU_KEYBOARD)
     chat_id = str(update.effective_user.id)
     question = redis_db.get(chat_id)
     message_text = update.message.text
@@ -52,8 +50,7 @@ def handle_solution_attempt(bot, update, redis_db):
 
 
 def handle_other_text(bot, update):
-    menu_keyboard = [['Новый вопрос', 'Сдаться'], ['Мой счет']]
-    reply_markup = telegram.ReplyKeyboardMarkup(menu_keyboard)
+    reply_markup = telegram.ReplyKeyboardMarkup(MENU_KEYBOARD)
     update.message.reply_text('Нажми на кнопку "Новый вопрос"', reply_markup=reply_markup)
     return NEW_QUESTION
 
