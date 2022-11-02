@@ -24,7 +24,7 @@ def start(bot, update):
 
 def handle_new_question_request(bot, update, redis_db):
     reply_markup = telegram.ReplyKeyboardMarkup(MENU_KEYBOARD)
-    chat_id = str(update.effective_user.id)
+    chat_id = update.effective_user.id
     question = get_random_question()
     redis_db.set(chat_id, question)
     update.message.reply_text(text=question, reply_markup=reply_markup)
@@ -33,15 +33,17 @@ def handle_new_question_request(bot, update, redis_db):
 
 def handle_solution_attempt(bot, update, redis_db):
     reply_markup = telegram.ReplyKeyboardMarkup(MENU_KEYBOARD)
-    chat_id = str(update.effective_user.id)
+    chat_id = update.effective_user.id
     question = redis_db.get(chat_id)
     message_text = update.message.text
     if not question:
         return NEW_QUESTION
     answer = get_answer(question)
+    print(answer)
     if answer == message_text:
         update.message.reply_text('Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос»',
                                   reply_markup=reply_markup)
+        redis_db.set(chat_id, '')
         return NEW_QUESTION
     else:
         update.message.reply_text('Неправильно… Попробуешь ещё раз?', reply_markup=reply_markup)
@@ -55,7 +57,7 @@ def handle_other_text(bot, update):
 
 
 def handle_defeat(bot, update, redis_db):
-    chat_id = str(update.effective_user.id)
+    chat_id = update.effective_user.id
     question = redis_db.get(chat_id)
     if not question:
         return NEW_QUESTION
