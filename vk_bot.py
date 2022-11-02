@@ -5,9 +5,11 @@ from environs import Env
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from vk_api.longpoll import VkEventType, VkLongPoll
 from vk_api.utils import get_random_id
+import telegram
 
 from quiz_helpers import get_answer, get_random_question
 from redis_tools import auth_redis
+from log_helpers import TelegramLogsHandler
 
 logger = logging.getLogger('vk_bot')
 
@@ -62,6 +64,13 @@ def main():
     vk_session = vk.VkApi(token=vk_group_token)
     vk_api = vk_session.get_api()
     longpoll = VkLongPoll(vk_session)
+
+    tg_token = env('TG_TOKEN')
+    tg_chat_id = env('TG_CHAT_ID')
+    bot = telegram.Bot(token=tg_token)
+    logger.addHandler(TelegramLogsHandler(bot, tg_chat_id))
+    logger.info('Бот для логов запущен')
+
     redis_address = env('REDIS_ADDRESS')
     redis_port = env('REDIS_PORT')
     redis_password = env('REDIS_PASSWORD')
@@ -74,14 +83,20 @@ def main():
     menu_keyboard.add_line()
     menu_keyboard.add_button('Мой счет', color=VkKeyboardColor.PRIMARY)
 
-    for event in longpoll.listen():
-        if event.type == VkEventType.MESSAGE_NEW and event.to_me:
-            if event.text == 'Новый вопрос':
-                handle_new_question_request(event, vk_api, keyboard=menu_keyboard, redis_db=quiz_db)
-            elif event.text == 'Сдаться':
-                handle_defeat(event, vk_api, keyboard=menu_keyboard, redis_db=quiz_db)
-            else:
-                handle_solution_attempt(event, vk_api, keyboard=menu_keyboard, redis_db=quiz_db)
+    while True:
+
+        try:
+            for event in longpoll.listen():
+                if event.type == VkEventType.MESSAGE_NEW and event.to_me:
+                    if event.text == 'Новый вопрос':
+                        handle_new_question_request(event, vk_api, keyboard=menu_keyboard, redis_db=quiz_db)
+                    elif event.text == 'Сдаться':
+                        handle_defeat(event, vk_api, keyboard=menu_keyboard, redis_db=quiz_db)
+                    else:
+                        handle_solution_attempt(event, vk_api, keyboard=menu_keyboard, redis_db=quiz_db)
+
+        except Exception:
+            logger.exception('Произошла ошибка:')
 
 
 if __name__ == "__main__":

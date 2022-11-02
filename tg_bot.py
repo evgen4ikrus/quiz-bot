@@ -8,6 +8,7 @@ from telegram.ext import (CommandHandler, ConversationHandler, Filters,
 
 from quiz_helpers import get_answer, get_random_question
 from redis_tools import auth_redis
+from log_helpers import TelegramLogsHandler
 
 logger = logging.getLogger('tg_bot')
 
@@ -39,7 +40,6 @@ def handle_solution_attempt(bot, update, redis_db):
     if not question:
         return NEW_QUESTION
     answer = get_answer(question)
-    print(answer)
     if answer == message_text:
         update.message.reply_text('Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос»',
                                   reply_markup=reply_markup)
@@ -76,6 +76,12 @@ def main():
     redis_password = env('REDIS_PASSWORD')
     tg_token = env('TG_TOKEN')
 
+    tg_chat_id = env('TG_CHAT_ID')
+    bot = telegram.Bot(token=tg_token)
+    logger.setLevel(logging.INFO)
+    logger.addHandler(TelegramLogsHandler(bot, tg_chat_id))
+    logger.info('Бот для логов запущен')
+
     quiz_db = auth_redis(redis_address, redis_port, redis_password)
     quiz_db.flushall()
 
@@ -86,21 +92,25 @@ def main():
     handle_new_question_request_with_args = partial(handle_new_question_request, redis_db=quiz_db)
     handle_defeat_with_args = partial(handle_defeat, redis_db=quiz_db)
 
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start)],
-        states={
-            NEW_QUESTION: [RegexHandler('Новый вопрос', handle_new_question_request_with_args)],
-            SOLUTION_ATTEMPT: [RegexHandler('Сдаться', handle_defeat_with_args),
-                               MessageHandler(Filters.text, handle_solution_attempt_with_args)],
-        },
-        fallbacks=[MessageHandler(Filters.text, handle_other_text)]
-    )
-    dp.add_handler(conv_handler)
+    while True:
 
-    updater.start_polling()
-    logger.info('TG бот запущен')
+        try:
+            conv_handler = ConversationHandler(
+                entry_points=[CommandHandler('start', start)],
+                states={
+                    NEW_QUESTION: [RegexHandler('Новый вопрос', handle_new_question_request_with_args)],
+                    SOLUTION_ATTEMPT: [RegexHandler('Сдаться', handle_defeat_with_args),
+                                       MessageHandler(Filters.text, handle_solution_attempt_with_args)],
+                },
+                fallbacks=[MessageHandler(Filters.text, handle_other_text)]
+            )
+            dp.add_handler(conv_handler)
+            updater.start_polling()
+            logger.info('TG бот запущен')
+            updater.idle()
 
-    updater.idle()
+        except Exception:
+            logger.exception('Произошла ошибка:')
 
 
 if __name__ == '__main__':
