@@ -1,44 +1,62 @@
 import logging
+from functools import partial
 
 import telegram
 from environs import Env
-from telegram.ext import CommandHandler, Filters, MessageHandler, Updater
+from telegram.ext import (CommandHandler, ConversationHandler, Filters,
+                          MessageHandler, RegexHandler, Updater)
+
 from quiz_helpers import get_answer, get_random_question
 from redis_tools import auth_redis
-from functools import partial
 
 
 logger = logging.getLogger('tg_bot')
 
 
+NEW_QUESTION, SOLUTION_ATTEMPT = range(2)
+
+
 def start(bot, update):
     menu_keyboard = [['Новый вопрос', 'Сдаться'], ['Мой счет']]
     reply_markup = telegram.ReplyKeyboardMarkup(menu_keyboard)
-    chat_id = str(update.effective_user.id)
-    bot.send_message(chat_id=chat_id, text='Привет, я бот для викторин!', reply_markup=reply_markup)
+    update.message.reply_text('Привет, я бот для викторин! Нажми кнопку "Новый вопрос"', reply_markup=reply_markup)
+    return NEW_QUESTION
 
 
-def echo(bot, update, redis_db):
+def handle_new_question_request(bot, update, redis_db):
     menu_keyboard = [['Новый вопрос', 'Сдаться'], ['Мой счет']]
     reply_markup = telegram.ReplyKeyboardMarkup(menu_keyboard)
-    message_text = update.message.text
     chat_id = str(update.effective_user.id)
-    if message_text == 'Новый вопрос':
-        question = get_random_question()
-        redis_db.set(chat_id, question)
-        bot.send_message(chat_id=chat_id, text=question, reply_markup=reply_markup)
+    question = get_random_question()
+    redis_db.set(chat_id, question)
+    update.message.reply_text(text=question, reply_markup=reply_markup)
+    return SOLUTION_ATTEMPT
+
+
+def handle_solution_attempt(bot, update, redis_db):
+    menu_keyboard = [['Новый вопрос', 'Сдаться'], ['Мой счет']]
+    reply_markup = telegram.ReplyKeyboardMarkup(menu_keyboard)
+    chat_id = str(update.effective_user.id)
+    question = redis_db.get(chat_id)
+    message_text = update.message.text
+    if not question:
+        return NEW_QUESTION
+    answer = get_answer(question)
+    clean_answer = answer.partition('.')[0].partition('(')[0]
+    if clean_answer == message_text:
+        update.message.reply_text('Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос»',
+                                  reply_markup=reply_markup)
+        return NEW_QUESTION
     else:
-        question = redis_db.get(chat_id)
-        if not question:
-            return
-        answer = get_answer(question)
-        clean_answer = answer.partition('.')[0].partition('(')[0]
-        if clean_answer == message_text:
-            bot.send_message(chat_id=chat_id,
-                             text='Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос»”',
-                             reply_markup=reply_markup)
-        else:
-            bot.send_message(chat_id=chat_id, text='Неправильно… Попробуешь ещё раз?', reply_markup=reply_markup)
+        update.message.reply_text('Неправильно… Попробуешь ещё раз?', reply_markup=reply_markup)
+        return SOLUTION_ATTEMPT
+
+
+def process_text(bot, update):
+    menu_keyboard = [['Новый вопрос', 'Сдаться'], ['Мой счет']]
+    reply_markup = telegram.ReplyKeyboardMarkup(menu_keyboard)
+    update.message.reply_text('Нажми на одну из кнопок', reply_markup=reply_markup)
+    return NEW_QUESTION
 
 
 def main():
@@ -57,9 +75,18 @@ def main():
     updater = Updater(tg_token)
 
     dp = updater.dispatcher
-    echo_with_args = partial(echo, redis_db=quiz_db)
-    dp.add_handler(CommandHandler('start', start))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, echo_with_args))
+    handle_solution_attempt_with_args = partial(handle_solution_attempt, redis_db=quiz_db)
+    handle_new_question_request_with_args = partial(handle_new_question_request, redis_db=quiz_db)
+
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', start)],
+        states={
+            NEW_QUESTION: [RegexHandler('Новый вопрос', handle_new_question_request_with_args)],
+            SOLUTION_ATTEMPT: [MessageHandler(Filters.text, handle_solution_attempt_with_args)],
+        },
+        fallbacks=[MessageHandler(Filters.text, process_text)]
+    )
+    dp.add_handler(conv_handler)
 
     updater.start_polling()
     logger.info('TG бот запущен')
