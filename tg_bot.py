@@ -9,7 +9,6 @@ from telegram.ext import (CommandHandler, ConversationHandler, Filters,
 from quiz_helpers import get_answer, get_random_question
 from redis_tools import auth_redis
 
-
 logger = logging.getLogger('tg_bot')
 
 
