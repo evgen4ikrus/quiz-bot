@@ -6,15 +6,50 @@ from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from vk_api.longpoll import VkEventType, VkLongPoll
 from vk_api.utils import get_random_id
 
+from quiz_helpers import get_answer, get_random_question
+from redis_tools import auth_redis
+
 logger = logging.getLogger('vk_bot')
 
 
-def echo(event, vk_api, keyboard):
+def handle_new_question_request(event, vk_api, keyboard, redis_db):
+    chat_id = event.user_id
+    question = get_random_question()
+    redis_db.set(chat_id, question)
+    vk_api.messages.send(peer_id=chat_id, random_id=get_random_id(), keyboard=keyboard.get_keyboard(), message=question)
+
+
+def handle_defeat(event, vk_api, keyboard, redis_db):
+    chat_id = event.user_id
+    question = redis_db.get(chat_id)
+    if not question:
+        vk_api.messages.send(peer_id=chat_id, random_id=get_random_id(),
+                             keyboard=keyboard.get_keyboard(), message='Нажми на кнопку "Новый вопрос"')
+        return
+    answer = get_answer(question)
+    vk_api.messages.send(peer_id=chat_id, random_id=get_random_id(),
+                         keyboard=keyboard.get_keyboard(), message=f'Правильный ответ: {answer}')
+    handle_new_question_request(event, vk_api, keyboard, redis_db)
+
+
+def handle_solution_attempt(event, vk_api, keyboard, redis_db):
+    chat_id = event.user_id
+    question = redis_db.get(chat_id)
+    if not question:
+        vk_api.messages.send(peer_id=chat_id, random_id=get_random_id(),
+                             keyboard=keyboard.get_keyboard(), message='Нажми на кнопку "Новый вопрос"')
+        return
+    answer = get_answer(question)
+    if answer == event.text:
+        message = 'Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос»'
+        redis_db.set(chat_id, '')
+    else:
+        message = 'Неправильно… Попробуешь ещё раз?'
     vk_api.messages.send(
-        peer_id=event.user_id,
+        peer_id=chat_id,
         random_id=get_random_id(),
         keyboard=keyboard.get_keyboard(),
-        message=event.text
+        message=message
     )
 
 
@@ -27,6 +62,11 @@ def main():
     vk_session = vk.VkApi(token=vk_group_token)
     vk_api = vk_session.get_api()
     longpoll = VkLongPoll(vk_session)
+    redis_address = env('REDIS_ADDRESS')
+    redis_port = env('REDIS_PORT')
+    redis_password = env('REDIS_PASSWORD')
+    quiz_db = auth_redis(redis_address, redis_port, redis_password)
+    quiz_db.flushall()
 
     menu_keyboard = VkKeyboard(one_time=True)
     menu_keyboard.add_button('Новый вопрос', color=VkKeyboardColor.POSITIVE)
@@ -36,7 +76,12 @@ def main():
 
     for event in longpoll.listen():
         if event.type == VkEventType.MESSAGE_NEW and event.to_me:
-            echo(event, vk_api, keyboard=menu_keyboard)
+            if event.text == 'Новый вопрос':
+                handle_new_question_request(event, vk_api, keyboard=menu_keyboard, redis_db=quiz_db)
+            elif event.text == 'Сдаться':
+                handle_defeat(event, vk_api, keyboard=menu_keyboard, redis_db=quiz_db)
+            else:
+                handle_solution_attempt(event, vk_api, keyboard=menu_keyboard, redis_db=quiz_db)
 
 
 if __name__ == "__main__":
