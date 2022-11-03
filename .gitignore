@@ -162,4 +162,3 @@ cython_debug/
 .vscode
 /files
 /quiz_questions
-quiz_bank.json
