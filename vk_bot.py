@@ -1,15 +1,15 @@
 import logging
 
+import telegram
 import vk_api as vk
 from environs import Env
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from vk_api.longpoll import VkEventType, VkLongPoll
 from vk_api.utils import get_random_id
-import telegram
 
+from log_helpers import TelegramLogsHandler
 from quiz_helpers import get_answer, get_random_question
 from redis_tools import auth_redis
-from log_helpers import TelegramLogsHandler
 
 logger = logging.getLogger('vk_bot')
 

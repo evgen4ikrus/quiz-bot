@@ -6,9 +6,9 @@ from environs import Env
 from telegram.ext import (CommandHandler, ConversationHandler, Filters,
                           MessageHandler, RegexHandler, Updater)
 
+from log_helpers import TelegramLogsHandler
 from quiz_helpers import get_answer, get_random_question
 from redis_tools import auth_redis
-from log_helpers import TelegramLogsHandler
 
 logger = logging.getLogger('tg_bot')
 
