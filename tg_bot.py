@@ -1,6 +1,7 @@
 import logging
 from functools import partial
 
+import redis
 import telegram
 from environs import Env
 from telegram.ext import (CommandHandler, ConversationHandler, Filters,
@@ -8,7 +9,6 @@ from telegram.ext import (CommandHandler, ConversationHandler, Filters,
 
 from log_helpers import TelegramLogsHandler
 from quiz_helpers import get_answer, get_random_question
-from redis_tools import auth_redis
 
 logger = logging.getLogger('tg_bot')
 
@@ -82,7 +82,8 @@ def main():
     logger.addHandler(TelegramLogsHandler(bot, tg_chat_id))
     logger.info('Бот для логов запущен')
 
-    quiz_db = auth_redis(redis_address, redis_port, redis_password)
+    quiz_db = redis.Redis(host=redis_address, port=redis_port, password=redis_password,
+                            charset='utf-8', decode_responses=True)
     quiz_db.flushall()
 
     updater = Updater(tg_token)

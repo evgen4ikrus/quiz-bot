@@ -1,5 +1,6 @@
 import logging
 
+import redis
 import telegram
 import vk_api as vk
 from environs import Env
@@ -9,7 +10,6 @@ from vk_api.utils import get_random_id
 
 from log_helpers import TelegramLogsHandler
 from quiz_helpers import get_answer, get_random_question
-from redis_tools import auth_redis
 
 logger = logging.getLogger('vk_bot')
 
@@ -74,7 +74,8 @@ def main():
     redis_address = env('REDIS_ADDRESS')
     redis_port = env('REDIS_PORT')
     redis_password = env('REDIS_PASSWORD')
-    quiz_db = auth_redis(redis_address, redis_port, redis_password)
+    quiz_db = redis.Redis(host=redis_address, port=redis_port, password=redis_password,
+                            charset='utf-8', decode_responses=True)
     quiz_db.flushall()
 
     menu_keyboard = VkKeyboard(one_time=True)
