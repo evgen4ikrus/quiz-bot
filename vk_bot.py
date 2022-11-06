@@ -1,3 +1,4 @@
+import json
 import logging
 
 import redis
@@ -14,34 +15,34 @@ from quiz_helpers import get_answer, get_random_question
 logger = logging.getLogger('vk_bot')
 
 
-def handle_new_question_request(event, vk_api, keyboard, redis_db):
+def handle_new_question_request(event, vk_api, keyboard, redis_db, quiz_bank):
     chat_id = event.user_id
-    question = get_random_question()
+    question = get_random_question(quiz_bank)
     redis_db.set(chat_id, question)
     vk_api.messages.send(peer_id=chat_id, random_id=get_random_id(), keyboard=keyboard.get_keyboard(), message=question)
 
 
-def handle_defeat(event, vk_api, keyboard, redis_db):
+def handle_defeat(event, vk_api, keyboard, redis_db, quiz_bank):
     chat_id = event.user_id
     question = redis_db.get(chat_id)
     if not question:
         vk_api.messages.send(peer_id=chat_id, random_id=get_random_id(),
                              keyboard=keyboard.get_keyboard(), message='Нажми на кнопку "Новый вопрос"')
         return
-    answer = get_answer(question)
+    answer = get_answer(question, quiz_bank)
     vk_api.messages.send(peer_id=chat_id, random_id=get_random_id(),
                          keyboard=keyboard.get_keyboard(), message=f'Правильный ответ: {answer}')
-    handle_new_question_request(event, vk_api, keyboard, redis_db)
+    handle_new_question_request(event, vk_api, keyboard, redis_db, quiz_bank)
 
 
-def handle_solution_attempt(event, vk_api, keyboard, redis_db):
+def handle_solution_attempt(event, vk_api, keyboard, redis_db, quiz_bank):
     chat_id = event.user_id
     question = redis_db.get(chat_id)
     if not question:
         vk_api.messages.send(peer_id=chat_id, random_id=get_random_id(),
                              keyboard=keyboard.get_keyboard(), message='Нажми на кнопку "Новый вопрос"')
         return
-    answer = get_answer(question)
+    answer = get_answer(question, quiz_bank)
     if answer == event.text:
         message = 'Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос»'
         redis_db.set(chat_id, '')
@@ -75,8 +76,11 @@ def main():
     redis_port = env('REDIS_PORT')
     redis_password = env('REDIS_PASSWORD')
     quiz_db = redis.Redis(host=redis_address, port=redis_port, password=redis_password,
-                            charset='utf-8', decode_responses=True)
+                          charset='utf-8', decode_responses=True)
     quiz_db.flushall()
+
+    with open('quiz_bank.json', 'r', encoding='UTF-8') as file:
+        quiz_bank = json.load(file)
 
     menu_keyboard = VkKeyboard(one_time=True)
     menu_keyboard.add_button('Новый вопрос', color=VkKeyboardColor.POSITIVE)
@@ -90,11 +94,13 @@ def main():
             for event in longpoll.listen():
                 if event.type == VkEventType.MESSAGE_NEW and event.to_me:
                     if event.text == 'Новый вопрос':
-                        handle_new_question_request(event, vk_api, keyboard=menu_keyboard, redis_db=quiz_db)
+                        handle_new_question_request(event, vk_api, keyboard=menu_keyboard,
+                                                    redis_db=quiz_db, quiz_bank=quiz_bank)
                     elif event.text == 'Сдаться':
-                        handle_defeat(event, vk_api, keyboard=menu_keyboard, redis_db=quiz_db)
+                        handle_defeat(event, vk_api, keyboard=menu_keyboard, redis_db=quiz_db, quiz_bank=quiz_bank)
                     else:
-                        handle_solution_attempt(event, vk_api, keyboard=menu_keyboard, redis_db=quiz_db)
+                        handle_solution_attempt(event, vk_api, keyboard=menu_keyboard,
+                                                redis_db=quiz_db, quiz_bank=quiz_bank)
 
         except Exception:
             logger.exception('Произошла ошибка:')

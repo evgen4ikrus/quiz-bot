@@ -1,3 +1,4 @@
+import json
 import logging
 from functools import partial
 
@@ -23,23 +24,23 @@ def start(bot, update):
     return NEW_QUESTION
 
 
-def handle_new_question_request(bot, update, redis_db):
+def handle_new_question_request(bot, update, redis_db, quiz_bank):
     reply_markup = telegram.ReplyKeyboardMarkup(MENU_KEYBOARD)
     chat_id = update.effective_user.id
-    question = get_random_question()
+    question = get_random_question(quiz_bank)
     redis_db.set(chat_id, question)
     update.message.reply_text(text=question, reply_markup=reply_markup)
     return SOLUTION_ATTEMPT
 
 
-def handle_solution_attempt(bot, update, redis_db):
+def handle_solution_attempt(bot, update, redis_db, quiz_bank):
     reply_markup = telegram.ReplyKeyboardMarkup(MENU_KEYBOARD)
     chat_id = update.effective_user.id
     question = redis_db.get(chat_id)
     message_text = update.message.text
     if not question:
         return NEW_QUESTION
-    answer = get_answer(question)
+    answer = get_answer(question, quiz_bank)
     if answer == message_text:
         update.message.reply_text('Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос»',
                                   reply_markup=reply_markup)
@@ -56,14 +57,14 @@ def handle_other_text(bot, update):
     return NEW_QUESTION
 
 
-def handle_defeat(bot, update, redis_db):
+def handle_defeat(bot, update, redis_db, quiz_bank):
     chat_id = update.effective_user.id
     question = redis_db.get(chat_id)
     if not question:
         return NEW_QUESTION
-    answer = get_answer(question)
+    answer = get_answer(question, quiz_bank)
     update.message.reply_text(f'Правильный ответ: {answer}')
-    handle_new_question_request(bot, update, redis_db=redis_db)
+    handle_new_question_request(bot, update, redis_db=redis_db, quiz_bank=quiz_bank)
 
 
 def main():
@@ -82,16 +83,19 @@ def main():
     logger.addHandler(TelegramLogsHandler(bot, tg_chat_id))
     logger.info('Бот для логов запущен')
 
+    with open('quiz_bank.json', 'r', encoding='UTF-8') as file:
+        quiz_bank = json.load(file)
+
     quiz_db = redis.Redis(host=redis_address, port=redis_port, password=redis_password,
-                            charset='utf-8', decode_responses=True)
+                          charset='utf-8', decode_responses=True)
     quiz_db.flushall()
 
     updater = Updater(tg_token)
 
     dp = updater.dispatcher
-    handle_solution_attempt_with_args = partial(handle_solution_attempt, redis_db=quiz_db)
-    handle_new_question_request_with_args = partial(handle_new_question_request, redis_db=quiz_db)
-    handle_defeat_with_args = partial(handle_defeat, redis_db=quiz_db)
+    handle_solution_attempt_with_args = partial(handle_solution_attempt, redis_db=quiz_db, quiz_bank=quiz_bank)
+    handle_new_question_request_with_args = partial(handle_new_question_request, redis_db=quiz_db, quiz_bank=quiz_bank)
+    handle_defeat_with_args = partial(handle_defeat, redis_db=quiz_db, quiz_bank=quiz_bank)
 
     while True:
 
